@@ -33,6 +33,8 @@ class MainActivity : ComponentActivity() {
         external fun nativeToggleRecordStatic(enable: Boolean)
         external fun nativeStartRecordingStatic(path: String): Boolean
         external fun nativeStopRecordingStatic()
+        external fun nativeLoadSampleStatic(path: String): Int
+        external fun nativeTriggerSampleStatic(sampleId: Int): Boolean
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +78,7 @@ class MainActivity : ComponentActivity() {
 fun MainUI() {
     var playing by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
+    var lastSampleId by remember { mutableStateOf(-1) }
     val context = LocalContext.current
     val activity = context as Activity
 
@@ -119,9 +122,43 @@ fun MainUI() {
                     // stop recording
                     MainActivity.nativeStopRecordingStatic()
                     recording = false
+                    // optionally load the last recorded sample
+                    val recordingsDir = File(activity.getExternalFilesDir(null), "recordings")
+                    val files = recordingsDir.listFiles()?.sortedByDescending { it.lastModified() }
+                    if (files != null && files.isNotEmpty()) {
+                        val newest = files[0]
+                        val id = MainActivity.nativeLoadSampleStatic(newest.absolutePath)
+                        lastSampleId = id
+                    }
                 }
             }) {
                 Text(if (!recording) "Record" else "Stop Rec")
+            }
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Button(onClick = {
+                // if we have last sample loaded, trigger it
+                if (lastSampleId >= 0) {
+                    MainActivity.nativeTriggerSampleStatic(lastSampleId)
+                }
+            }) {
+                Text("Play Last Recording")
+            }
+
+            Button(onClick = {
+                // attempt to load the most recent recording without triggering
+                val recordingsDir = File(activity.getExternalFilesDir(null), "recordings")
+                val files = recordingsDir.listFiles()?.sortedByDescending { it.lastModified() }
+                if (files != null && files.isNotEmpty()) {
+                    val newest = files[0]
+                    val id = MainActivity.nativeLoadSampleStatic(newest.absolutePath)
+                    lastSampleId = id
+                }
+            }) {
+                Text("Load Last Rec")
             }
         }
 

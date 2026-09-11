@@ -1,10 +1,21 @@
 #include "AudioEngine.h"
+#include "Sample.h"
 #include <oboe/Oboe.h>
 #include <thread>
 #include <iostream>
 #include <cmath>
+#include <mutex>
+#include <memory>
+#include <vector>
 
 using namespace oboe;
+
+struct Voice {
+    std::shared_ptr<Sample> sample;
+    uint64_t position = 0; // in frames
+    float gain = 1.0f;
+    bool finished = false;
+};
 
 AudioEngine::AudioEngine() {
     // empty
@@ -85,21 +96,70 @@ void AudioEngine::setRecording(bool enable) {
     }
 }
 
+int AudioEngine::loadSample(const std::string &path) {
+    std::shared_ptr<Sample> s = std::make_shared<Sample>();
+    if (!loadWavFile(path, *s)) return -1;
+    std::lock_guard<std::mutex> lock(samplesMutex);
+    samples.push_back(s);
+    return static_cast<int>(samples.size() - 1);
+}
+
+bool AudioEngine::triggerSample(int sampleId, float gain) {
+    std::lock_guard<std::mutex> lock(samplesMutex);
+    if (sampleId < 0 || sampleId >= static_cast<int>(samples.size())) return false;
+    Voice v;
+    v.sample = samples[sampleId];
+    v.position = 0;
+    v.gain = gain;
+    std::lock_guard<std::mutex> lock2(voicesMutex);
+    voices.push_back(v);
+    return true;
+}
+
 DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     float *out = static_cast<float*>(audioData);
     int32_t numChannels = oboeStream->getChannelCount();
-    float amplitude = 0.2f;
 
+    // zero output
+    for (int i = 0; i < numFrames * numChannels; ++i) out[i] = 0.0f;
+
+    // simple oscillator (for testing)
+    float amplitude = 0.15f;
     double sr = oboeStream->getSampleRate();
     if (sr > 0) phaseIncrement = 2.0 * M_PI * 440.0 / sr;
 
     for (int i = 0; i < numFrames; ++i) {
-        float value = static_cast<float>(sin(phase) * amplitude);
+        float oscValue = static_cast<float>(sin(phase) * amplitude);
         phase += phaseIncrement;
         if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
-
         for (int c = 0; c < numChannels; ++c) {
-            out[i * numChannels + c] = value;
+            out[i * numChannels + c] += oscValue;
+        }
+    }
+
+    // Mix active voices
+    std::lock_guard<std::mutex> lock(voicesMutex);
+    for (auto it = voices.begin(); it != voices.end();) {
+        Voice &v = *it;
+        auto s = v.sample;
+        if (!s) { it = voices.erase(it); continue; }
+        uint64_t framesInSample = s->data.size() / s->channels;
+
+        for (int i = 0; i < numFrames; ++i) {
+            if (v.position >= framesInSample) break;
+            for (int c = 0; c < numChannels; ++c) {
+                // read sample channel (if channels mismatch, simple handling)
+                int sampleChannel = c < s->channels ? c : 0;
+                float sampleValue = s->data[v.position * s->channels + sampleChannel];
+                out[i * numChannels + c] += sampleValue * v.gain;
+            }
+            v.position++;
+        }
+
+        if (v.position >= framesInSample) {
+            it = voices.erase(it);
+        } else {
+            ++it;
         }
     }
 

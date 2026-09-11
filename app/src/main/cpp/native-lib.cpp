@@ -59,3 +59,20 @@ Java_com_langkie_soulianodaw_MainActivity_nativeStopRecordingStatic(JNIEnv *env,
     if (!engine) return;
     engine->stopRecording();
 }
+
+// Sample load / trigger
+extern "C" JNIEXPORT jint JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeLoadSampleStatic(JNIEnv *env, jclass /* cls */, jstring jpath) {
+    if (!engine) return -1;
+    const char* path = env->GetStringUTFChars(jpath, nullptr);
+    int id = engine->loadSample(std::string(path));
+    env->ReleaseStringUTFChars(jpath, path);
+    return id;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeTriggerSampleStatic(JNIEnv *env, jclass /* cls */, jint sampleId) {
+    if (!engine) return JNI_FALSE;
+    bool ok = engine->triggerSample(static_cast<int>(sampleId));
+    return ok ? JNI_TRUE : JNI_FALSE;
+}

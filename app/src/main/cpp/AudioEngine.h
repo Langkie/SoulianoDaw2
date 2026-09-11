@@ -2,6 +2,11 @@
 #include <oboe/Oboe.h>
 #include <atomic>
 #include "WAVWriter.h"
+#include <string>
+#include <vector>
+#include <mutex>
+#include <memory>
+#include "Sample.h"
 
 class AudioEngine : public oboe::AudioStreamCallback {
 public:
@@ -15,6 +20,10 @@ public:
     bool startRecording(const std::string &path);
     void stopRecording();
     void setRecording(bool enable);
+
+    // Sample management
+    int loadSample(const std::string &path); // returns sample id or -1
+    bool triggerSample(int sampleId, float gain = 1.0f);
 
     // oboe::AudioStreamCallback
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *oboeStream,
@@ -30,4 +39,10 @@ private:
 
     double phase = 0.0;
     double phaseIncrement = 2.0 * M_PI * 440.0 / 48000.0; // default 44.1/48k sample rate handling later
+
+    // samples and voices
+    std::vector<std::shared_ptr<Sample>> samples;
+    std::vector<struct Voice> voices;
+    std::mutex samplesMutex;
+    std::mutex voicesMutex;
 };
