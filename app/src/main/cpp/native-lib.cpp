@@ -60,6 +60,21 @@ Java_com_langkie_soulianodaw_MainActivity_nativeStopRecordingStatic(JNIEnv *env,
     engine->stopRecording();
 }
 
+// Start/stop recording into a track
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeStartRecordingToTrackStatic(JNIEnv *env, jclass /* cls */, jint trackId) {
+    if (!engine) return JNI_FALSE;
+    bool ok = engine->startRecordingToTrack(static_cast<int>(trackId));
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeStopRecordingToTrackStatic(JNIEnv *env, jclass /* cls */) {
+    if (!engine) return JNI_FALSE;
+    bool ok = engine->stopRecordingToTrack();
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
 // Sample load / trigger
 extern "C" JNIEXPORT jint JNICALL
 Java_com_langkie_soulianodaw_MainActivity_nativeLoadSampleStatic(JNIEnv *env, jclass /* cls */, jstring jpath) {

@@ -8,6 +8,7 @@
 #include <memory>
 #include <vector>
 #include <algorithm>
+#include <chrono>
 
 using namespace oboe;
 
@@ -24,6 +25,7 @@ AudioEngine::AudioEngine() {
 
 AudioEngine::~AudioEngine() {
     stopRecording();
+    stopRecordingToTrack();
     stop();
     if (stream) {
         stream->close();
@@ -99,6 +101,83 @@ void AudioEngine::setRecording(bool enable) {
             writerOpened = false;
         }
     }
+}
+
+bool AudioEngine::startRecordingToTrack(int trackId) {
+    if (!stream) {
+        std::cerr << "Cannot start track recording: stream not open" << std::endl;
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(recordingMutex);
+    if (recordingToTrack.load()) return false;
+    recordingBuffer.clear();
+    recordingTrackId = trackId;
+    recordingStartTransportFrame = transportFrame.load();
+    recordingToTrack.store(true);
+    std::cout << "Started recording to track " << trackId << " at transport frame " << recordingStartTransportFrame << std::endl;
+    return true;
+}
+
+bool AudioEngine::stopRecordingToTrack() {
+    std::lock_guard<std::mutex> lock(recordingMutex);
+    if (!recordingToTrack.load()) return false;
+    recordingToTrack.store(false);
+
+    // convert recordingBuffer to a Sample and add to samples
+    std::shared_ptr<Sample> s = std::make_shared<Sample>();
+    if (!stream) return false;
+    s->sampleRate = static_cast<int>(stream->getSampleRate());
+    // assume stereo
+    int channels = stream->getChannelCount();
+    s->channels = channels;
+    s->data = recordingBuffer; // already interleaved floats
+
+    int sampleId = -1;
+    {
+        std::lock_guard<std::mutex> lockSamples(samplesMutex);
+        samples.push_back(s);
+        sampleId = static_cast<int>(samples.size() - 1);
+    }
+
+    // create a track if necessary
+    int trackId = recordingTrackId;
+    {
+        std::lock_guard<std::mutex> lockTracks(tracksMutex);
+        if (trackId < 0 || trackId >= static_cast<int>(tracks.size())) {
+            Track t;
+            t.sampleId = sampleId;
+            t.gain = 1.0f;
+            t.muted = false;
+            t.solo = false;
+            tracks.push_back(t);
+            trackId = static_cast<int>(tracks.size() - 1);
+        } else {
+            // set track's sample to this new sample
+            tracks[trackId].sampleId = sampleId;
+        }
+    }
+
+    // create a clip referencing this sample starting at recordingStartTransportFrame
+    uint64_t startFrame = recordingStartTransportFrame;
+    int clipId = -1;
+    {
+        Clip c;
+        c.sampleId = sampleId;
+        c.trackId = trackId;
+        c.startFrame = startFrame;
+        c.lengthFrames = s->data.size() / s->channels;
+        std::lock_guard<std::mutex> lockClips(clipsMutex);
+        clips.push_back(c);
+        clipId = static_cast<int>(clips.size() - 1);
+    }
+
+    // Optionally write out WAV file copy to external recordings dir
+    // we will skip file writing here to keep things fast; callers can export mixdown later
+
+    std::cout << "Stopped recording to track " << trackId << ", created sample " << sampleId << " and clip " << clipId << std::endl;
+    recordingTrackId = -1;
+    recordingBuffer.clear();
+    return true;
 }
 
 int AudioEngine::loadSample(const std::string &path) {
@@ -300,6 +379,13 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
     // If recording, capture buffer to file
     if (isRecording.load() && writerOpened) {
         wavWriter.writeFloats(out, numFrames);
+    }
+
+    // If recording to track, copy output block into recording buffer
+    if (recordingToTrack.load()) {
+        std::lock_guard<std::mutex> lock(recordingMutex);
+        // append interleaved floats
+        recordingBuffer.insert(recordingBuffer.end(), out, out + (numFrames * numChannels));
     }
 
     return DataCallbackResult::Continue;

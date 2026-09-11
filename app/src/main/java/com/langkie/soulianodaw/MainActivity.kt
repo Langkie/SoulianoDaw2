@@ -52,6 +52,8 @@ class MainActivity : ComponentActivity() {
         external fun nativeCreateClipFromSampleStatic(sampleId: Int, trackId: Int, startFrame: Long): Int
         external fun nativeSetTransportPlayStatic(play: Boolean)
         external fun nativeSeekTransportStatic(frame: Long)
+        external fun nativeStartRecordingToTrackStatic(trackId: Int): Boolean
+        external fun nativeStopRecordingToTrackStatic(): Boolean
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -160,6 +162,7 @@ fun TrackListUI(tracksCount: Int, onSetGain: (Int, Float) -> Unit, onToggleMute:
 fun MainUI() {
     var playing by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
+    var recordingToTrack by remember { mutableStateOf(false) }
     var lastTrackId by remember { mutableStateOf(-1) }
     var tracksCount by remember { mutableStateOf(0) }
     var transportPos by remember { mutableStateOf(0f) }
@@ -222,6 +225,36 @@ fun MainUI() {
                 }
             }) {
                 Text(if (!recording) "Record" else "Stop Rec")
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(onClick = {
+                // start/stop recording into a track (non-destructive)
+                if (!recordingToTrack) {
+                    // ensure we have a track to record into; create if none
+                    var target = lastTrackId
+                    if (target < 0) {
+                        // create an empty track by creating a tiny silent sample
+                        val recordingsDir = File(activity.getExternalFilesDir(null), "recordings")
+                        recordingsDir.mkdirs()
+                        val emptyPath = File(recordingsDir, "empty_${System.currentTimeMillis()}.wav").absolutePath
+                        // start/stop a quick recording to create a file (not ideal). Instead, attempt to create track with sample id -1; native will create track
+                        target = -1
+                    }
+                    val ok = MainActivity.nativeStartRecordingToTrackStatic(target)
+                    if (ok) recordingToTrack = true
+                } else {
+                    val ok = MainActivity.nativeStopRecordingToTrackStatic()
+                    if (ok) {
+                        recordingToTrack = false
+                        // update UI: new track likely created; just bump count by 1
+                        tracksCount += 1
+                        lastTrackId = tracksCount - 1
+                    }
+                }
+            }) {
+                Text(if (!recordingToTrack) "Record To Track" else "Stop Track Rec")
             }
 
             Spacer(modifier = Modifier.width(8.dp))

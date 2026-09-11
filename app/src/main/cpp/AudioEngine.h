@@ -22,6 +22,10 @@ public:
     void stopRecording();
     void setRecording(bool enable);
 
+    // Recording into a track (non-destructive)
+    bool startRecordingToTrack(int trackId);
+    bool stopRecordingToTrack();
+
     // Sample management
     int loadSample(const std::string &path); // returns sample id or -1
     bool triggerSample(int sampleId, float gain = 1.0f);
@@ -71,4 +75,11 @@ private:
     // transport
     std::atomic<bool> transportPlaying{false};
     std::atomic<uint64_t> transportFrame{0};
+
+    // recording to track
+    std::atomic<bool> recordingToTrack{false};
+    int recordingTrackId = -1;
+    uint64_t recordingStartTransportFrame = 0;
+    std::vector<float> recordingBuffer; // interleaved floats
+    std::mutex recordingMutex;
 };
