@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Crown (king) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M2,17 L22,17 L20,7 L16,11 L12,5 L8,11 L4,7 L2,17 z M6,15 L9,10 L11,14 z" />
+
+    <!-- Musical note 1 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M16.5,7.5 v6.25 a1.75,1.75 0 1,1 -0.99,1.57 v-6.25 z M15.5,15.5 a1.25,1.25 0 1,0 0,2.5 a1.25,1.25 0 0,0 0,-2.5 z" />
+
+    <!-- Musical note 2 (smaller) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M19,5 v5.25 a1.25,1.25 0 1,1 -0.7,1.12 V6.12 z M18,11.5 a0.9,0.9 0 1,0 0,1.8 a0.9,0.9 0 0,0 0,-1.8 z" />
+
+</vector>
