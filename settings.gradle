@@ -1,0 +1,2 @@
+rootProject.name = "SoulianoDaw2"
+include ":app"

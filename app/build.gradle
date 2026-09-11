@@ -1,0 +1,58 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android' version '1.8.21'
+}
+
+android {
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.langkie.soulianodaw"
+        minSdk 24
+        targetSdk 34
+        versionCode 1
+        versionName "0.1"
+
+        externalNativeBuild {
+            cmake {
+                cppFlags "-std=c++17 -O3"
+            }
+        }
+
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    buildFeatures {
+        compose true
+    }
+
+    composeOptions {
+        kotlinCompilerExtensionVersion '1.5.3'
+    }
+
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+            version "3.22.1"
+        }
+    }
+
+    namespace 'com.langkie.soulianodaw'
+}
+
+dependencies {
+    implementation "androidx.core:core-ktx:1.10.1"
+    implementation "androidx.activity:activity-compose:1.8.0"
+    implementation "androidx.compose.ui:ui:1.5.3"
+    implementation "androidx.compose.material:material:1.5.3"
+    implementation "androidx.compose.ui:ui-tooling-preview:1.5.3"
+
+}
