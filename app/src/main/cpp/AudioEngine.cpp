@@ -6,7 +6,7 @@
 
 using namespace oboe;
 
-AudioEngine::AudioEngine() {
+AudioEngine::AudioEngine() : samplePlayer(std::make_unique<SamplePlayer>()) {
     // empty
 }
 
@@ -51,6 +51,41 @@ void AudioEngine::stop() {
     std::cerr << "Audio stream stopped" << std::endl;
 }
 
+bool AudioEngine::loadSample(const std::string& filePath) {
+    if (!samplePlayer) return false;
+    return samplePlayer->loadSample(filePath);
+}
+
+void AudioEngine::playSample() {
+    if (!samplePlayer) return;
+    samplePlayer->play();
+}
+
+void AudioEngine::stopSample() {
+    if (!samplePlayer) return;
+    samplePlayer->stop();
+}
+
+void AudioEngine::seekSample(double timeSeconds) {
+    if (!samplePlayer) return;
+    samplePlayer->seekTo(timeSeconds);
+}
+
+double AudioEngine::getSamplePosition() {
+    if (!samplePlayer) return 0.0;
+    return samplePlayer->getCurrentPosition();
+}
+
+double AudioEngine::getSampleDuration() {
+    if (!samplePlayer) return 0.0;
+    return samplePlayer->getDuration();
+}
+
+bool AudioEngine::hasSampleLoaded() {
+    if (!samplePlayer) return false;
+    return samplePlayer->hasSample();
+}
+
 void AudioEngine::setRecording(bool enable) {
     isRecording.store(enable);
     if (enable) {
@@ -64,18 +99,24 @@ void AudioEngine::setRecording(bool enable) {
 DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     float *out = static_cast<float*>(audioData);
     int32_t numChannels = oboeStream->getChannelCount();
-    float amplitude = 0.2f;
 
-    double sr = oboeStream->getSampleRate();
-    if (sr > 0) phaseIncrement = 2.0 * M_PI * 440.0 / sr;
+    // If sample is loaded and playing, use it; otherwise use sine wave
+    if (samplePlayer && samplePlayer->hasSample()) {
+        samplePlayer->getAudioFrame(out, numFrames, numChannels);
+    } else {
+        // Fallback to sine wave generator
+        float amplitude = 0.2f;
+        double sr = oboeStream->getSampleRate();
+        if (sr > 0) phaseIncrement = 2.0 * M_PI * 440.0 / sr;
 
-    for (int i = 0; i < numFrames; ++i) {
-        float value = static_cast<float>(sin(phase) * amplitude);
-        phase += phaseIncrement;
-        if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
+        for (int i = 0; i < numFrames; ++i) {
+            float value = static_cast<float>(sin(phase) * amplitude);
+            phase += phaseIncrement;
+            if (phase >= 2.0 * M_PI) phase -= 2.0 * M_PI;
 
-        for (int c = 0; c < numChannels; ++c) {
-            out[i * numChannels + c] = value;
+            for (int c = 0; c < numChannels; ++c) {
+                out[i * numChannels + c] = value;
+            }
         }
     }
 
