@@ -20,6 +20,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import java.io.File
+import android.widget.Toast
 
 class MainActivity : ComponentActivity() {
     companion object {
@@ -39,6 +40,7 @@ class MainActivity : ComponentActivity() {
         external fun nativeCreateTrackWithSampleStatic(path: String): Int
         external fun nativeSetTrackGainStatic(trackId: Int, gain: Float): Boolean
         external fun nativeToggleTrackMuteStatic(trackId: Int): Boolean
+        external fun nativeExportMixdownStatic(path: String): Boolean
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -74,22 +76,6 @@ class MainActivity : ComponentActivity() {
                 Log.w("Souliano", "Record permission denied")
             }
             pendingRecordingPath = null
-        }
-    }
-}
-
-@Composable
-fun TrackListUI(tracksCount: Int, onSetGain: (Int, Float) -> Unit, onToggleMute: (Int) -> Unit, onTrigger: (Int) -> Unit) {
-    Column {
-        for (i in 0 until tracksCount) {
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
-                Text("Track $i", modifier = Modifier.width(80.dp))
-                Slider(value = 1.0f, onValueChange = { v -> onSetGain(i, v) }, valueRange = 0f..2f, modifier = Modifier.weight(1f))
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { onToggleMute(i) }) { Text("Mute") }
-                Spacer(modifier = Modifier.width(8.dp))
-                Button(onClick = { onTrigger(i) }) { Text("Play") }
-            }
         }
     }
 }
@@ -157,6 +143,23 @@ fun MainUI() {
                 }
             }) {
                 Text(if (!recording) "Record" else "Stop Rec")
+            }
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            Button(onClick = {
+                // Export mixdown of all tracks
+                val outDir = File(activity.getExternalFilesDir(null), "exports")
+                outDir.mkdirs()
+                val outPath = File(outDir, "mixdown_${System.currentTimeMillis()}.wav").absolutePath
+                val ok = MainActivity.nativeExportMixdownStatic(outPath)
+                if (ok) {
+                    Toast.makeText(context, "Exported mixdown: $outPath", Toast.LENGTH_LONG).show()
+                } else {
+                    Toast.makeText(context, "Mixdown failed", Toast.LENGTH_SHORT).show()
+                }
+            }) {
+                Text("Export Mixdown")
             }
         }
 
