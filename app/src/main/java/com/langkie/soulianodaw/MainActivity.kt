@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button
 import androidx.compose.material.Text
 import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,9 @@ class MainActivity : ComponentActivity() {
         external fun nativeStopRecordingStatic()
         external fun nativeLoadSampleStatic(path: String): Int
         external fun nativeTriggerSampleStatic(sampleId: Int): Boolean
+        external fun nativeCreateTrackWithSampleStatic(path: String): Int
+        external fun nativeSetTrackGainStatic(trackId: Int, gain: Float): Boolean
+        external fun nativeToggleTrackMuteStatic(trackId: Int): Boolean
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -75,10 +79,27 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
+fun TrackListUI(tracksCount: Int, onSetGain: (Int, Float) -> Unit, onToggleMute: (Int) -> Unit, onTrigger: (Int) -> Unit) {
+    Column {
+        for (i in 0 until tracksCount) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
+                Text("Track $i", modifier = Modifier.width(80.dp))
+                Slider(value = 1.0f, onValueChange = { v -> onSetGain(i, v) }, valueRange = 0f..2f, modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { onToggleMute(i) }) { Text("Mute") }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { onTrigger(i) }) { Text("Play") }
+            }
+        }
+    }
+}
+
+@Composable
 fun MainUI() {
     var playing by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
-    var lastSampleId by remember { mutableStateOf(-1) }
+    var lastTrackId by remember { mutableStateOf(-1) }
+    var tracksCount by remember { mutableStateOf(0) }
     val context = LocalContext.current
     val activity = context as Activity
 
@@ -86,7 +107,7 @@ fun MainUI() {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
+        verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -122,13 +143,16 @@ fun MainUI() {
                     // stop recording
                     MainActivity.nativeStopRecordingStatic()
                     recording = false
-                    // optionally load the last recorded sample
+                    // create a new track from the newest recording
                     val recordingsDir = File(activity.getExternalFilesDir(null), "recordings")
                     val files = recordingsDir.listFiles()?.sortedByDescending { it.lastModified() }
                     if (files != null && files.isNotEmpty()) {
                         val newest = files[0]
-                        val id = MainActivity.nativeLoadSampleStatic(newest.absolutePath)
-                        lastSampleId = id
+                        val trackId = MainActivity.nativeCreateTrackWithSampleStatic(newest.absolutePath)
+                        if (trackId >= 0) {
+                            lastTrackId = trackId
+                            tracksCount = trackId + 1
+                        }
                     }
                 }
             }) {
@@ -140,27 +164,50 @@ fun MainUI() {
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
-                // if we have last sample loaded, trigger it
-                if (lastSampleId >= 0) {
-                    MainActivity.nativeTriggerSampleStatic(lastSampleId)
-                }
-            }) {
-                Text("Play Last Recording")
-            }
-
-            Button(onClick = {
-                // attempt to load the most recent recording without triggering
+                // load last recording as a track without recording
                 val recordingsDir = File(activity.getExternalFilesDir(null), "recordings")
                 val files = recordingsDir.listFiles()?.sortedByDescending { it.lastModified() }
                 if (files != null && files.isNotEmpty()) {
                     val newest = files[0]
-                    val id = MainActivity.nativeLoadSampleStatic(newest.absolutePath)
-                    lastSampleId = id
+                    val trackId = MainActivity.nativeCreateTrackWithSampleStatic(newest.absolutePath)
+                    if (trackId >= 0) {
+                        lastTrackId = trackId
+                        tracksCount = trackId + 1
+                    }
                 }
             }) {
-                Text("Load Last Rec")
+                Text("Load Last Rec as Track")
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Button(onClick = {
+                // trigger last track if exists
+                if (lastTrackId >= 0) {
+                    // trigger the underlying sample
+                    // We don't have a direct track-play function; trigger sample by mapping track -> sample
+                    MainActivity.nativeTriggerSampleStatic(lastTrackId)
+                }
+            }) {
+                Text("Play Last Track")
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Track list UI
+        TrackListUI(tracksCount,
+            onSetGain = { tid, gain ->
+                MainActivity.nativeSetTrackGainStatic(tid, gain)
+            },
+            onToggleMute = { tid ->
+                MainActivity.nativeToggleTrackMuteStatic(tid)
+            },
+            onTrigger = { tid ->
+                // trigger the sample associated with track id
+                MainActivity.nativeTriggerSampleStatic(tid)
+            }
+        )
 
         Spacer(modifier = Modifier.height(24.dp))
 

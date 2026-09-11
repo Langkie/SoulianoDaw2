@@ -76,3 +76,27 @@ Java_com_langkie_soulianodaw_MainActivity_nativeTriggerSampleStatic(JNIEnv *env,
     bool ok = engine->triggerSample(static_cast<int>(sampleId));
     return ok ? JNI_TRUE : JNI_FALSE;
 }
+
+// Track management
+extern "C" JNIEXPORT jint JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeCreateTrackWithSampleStatic(JNIEnv *env, jclass /* cls */, jstring jpath) {
+    if (!engine) return -1;
+    const char* path = env->GetStringUTFChars(jpath, nullptr);
+    int id = engine->createTrackWithSample(std::string(path));
+    env->ReleaseStringUTFChars(jpath, path);
+    return id;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeSetTrackGainStatic(JNIEnv *env, jclass /* cls */, jint trackId, jfloat gain) {
+    if (!engine) return JNI_FALSE;
+    bool ok = engine->setTrackGain(static_cast<int>(trackId), static_cast<float>(gain));
+    return ok ? JNI_TRUE : JNI_FALSE;
+}
+
+extern "C" JNIEXPORT jboolean JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeToggleTrackMuteStatic(JNIEnv *env, jclass /* cls */, jint trackId) {
+    if (!engine) return JNI_FALSE;
+    bool ok = engine->toggleTrackMute(static_cast<int>(trackId));
+    return ok ? JNI_TRUE : JNI_FALSE;
+}

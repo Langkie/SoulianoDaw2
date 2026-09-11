@@ -25,6 +25,11 @@ public:
     int loadSample(const std::string &path); // returns sample id or -1
     bool triggerSample(int sampleId, float gain = 1.0f);
 
+    // Track management
+    int createTrackWithSample(const std::string &path); // returns track id or -1
+    bool setTrackGain(int trackId, float gain);
+    bool toggleTrackMute(int trackId);
+
     // oboe::AudioStreamCallback
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *oboeStream,
                                           void *audioData, int32_t numFrames) override;
@@ -45,4 +50,8 @@ private:
     std::vector<struct Voice> voices;
     std::mutex samplesMutex;
     std::mutex voicesMutex;
+
+    // tracks
+    std::vector<Track> tracks;
+    std::mutex tracksMutex;
 };

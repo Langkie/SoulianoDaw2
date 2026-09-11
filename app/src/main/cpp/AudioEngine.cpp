@@ -116,6 +116,33 @@ bool AudioEngine::triggerSample(int sampleId, float gain) {
     return true;
 }
 
+int AudioEngine::createTrackWithSample(const std::string &path) {
+    int sampleId = loadSample(path);
+    if (sampleId < 0) return -1;
+    Track t;
+    t.sampleId = sampleId;
+    t.gain = 1.0f;
+    t.muted = false;
+    t.solo = false;
+    std::lock_guard<std::mutex> lock(tracksMutex);
+    tracks.push_back(t);
+    return static_cast<int>(tracks.size() - 1);
+}
+
+bool AudioEngine::setTrackGain(int trackId, float gain) {
+    std::lock_guard<std::mutex> lock(tracksMutex);
+    if (trackId < 0 || trackId >= static_cast<int>(tracks.size())) return false;
+    tracks[trackId].gain = gain;
+    return true;
+}
+
+bool AudioEngine::toggleTrackMute(int trackId) {
+    std::lock_guard<std::mutex> lock(tracksMutex);
+    if (trackId < 0 || trackId >= static_cast<int>(tracks.size())) return false;
+    tracks[trackId].muted = !tracks[trackId].muted;
+    return true;
+}
+
 DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     float *out = static_cast<float*>(audioData);
     int32_t numChannels = oboeStream->getChannelCount();
@@ -124,7 +151,7 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
     for (int i = 0; i < numFrames * numChannels; ++i) out[i] = 0.0f;
 
     // simple oscillator (for testing)
-    float amplitude = 0.15f;
+    float amplitude = 0.12f;
     double sr = oboeStream->getSampleRate();
     if (sr > 0) phaseIncrement = 2.0 * M_PI * 440.0 / sr;
 
@@ -148,7 +175,6 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
         for (int i = 0; i < numFrames; ++i) {
             if (v.position >= framesInSample) break;
             for (int c = 0; c < numChannels; ++c) {
-                // read sample channel (if channels mismatch, simple handling)
                 int sampleChannel = c < s->channels ? c : 0;
                 float sampleValue = s->data[v.position * s->channels + sampleChannel];
                 out[i * numChannels + c] += sampleValue * v.gain;
@@ -162,6 +188,9 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
             ++it;
         }
     }
+
+    // Mix tracks' head-of-sample once (tracks are represented as metadata; triggering is separate)
+    // Currently, tracks only hold metadata (gain/mute) — playback is done via triggerSample which creates voices.
 
     // If recording, capture buffer to file
     if (isRecording.load() && writerOpened) {

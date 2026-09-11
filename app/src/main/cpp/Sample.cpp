@@ -4,6 +4,7 @@
 #include <vector>
 #include <string>
 #include <iostream>
+#include <cstring>
 
 static uint32_t read_u32(FILE *f) {
     uint32_t v = 0;
@@ -25,13 +26,14 @@ bool loadWavFile(const std::string &path, Sample &outSample) {
     }
 
     char riff[4];
-    fread(riff, 1, 4, f);
+    if (fread(riff, 1, 4, f) != 4) { fclose(f); return false; }
     if (std::strncmp(riff, "RIFF", 4) != 0) {
         fclose(f);
         std::cerr << "Not a RIFF file" << std::endl;
         return false;
     }
 
+    // skip file size and WAVE
     fseek(f, 8, SEEK_SET);
     // Search chunks for fmt and data
     uint32_t chunkId;
@@ -45,7 +47,7 @@ bool loadWavFile(const std::string &path, Sample &outSample) {
     long dataPos = 0;
 
     while (fread(&chunkId, sizeof(chunkId), 1, f) == 1) {
-        fread(&chunkSize, sizeof(chunkSize), 1, f);
+        if (fread(&chunkSize, sizeof(chunkSize), 1, f) != 1) break;
         if (chunkId == 0x20746d66) { // 'fmt '
             fmtFound = true;
             audioFormat = read_u16(f);
@@ -72,9 +74,8 @@ bool loadWavFile(const std::string &path, Sample &outSample) {
         return false;
     }
 
-    // reopen to read data
-    f = freopen(path.c_str(), "rb", f);
-    if (!f) return false;
+    // Read data
+    if (freopen(path.c_str(), "rb", f) == nullptr) { fclose(f); return false; }
     fseek(f, dataPos, SEEK_SET);
 
     int16_t sample = 0;
