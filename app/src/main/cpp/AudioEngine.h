@@ -1,6 +1,10 @@
 #pragma once
 #include <oboe/Oboe.h>
 #include <atomic>
+#include <fstream>
+#include <mutex>
+#include <string>
+#include <cstdint>
 
 class AudioEngine : public oboe::AudioStreamCallback {
 public:
@@ -9,7 +13,10 @@ public:
 
     void start();
     void stop();
-    void setRecording(bool enable);
+
+    // Recording control
+    bool startRecording(const std::string &path);
+    void stopRecording();
 
     // oboe::AudioStreamCallback
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream *oboeStream,
@@ -21,5 +28,12 @@ private:
     std::atomic<bool> isRecording{false};
 
     double phase = 0.0;
-    double phaseIncrement = 2.0 * M_PI * 440.0 / 48000.0; // default 44.1/48k sample rate handling later
+    double phaseIncrement = 2.0 * M_PI * 440.0 / 48000.0; // default 48k sample rate handling later
+
+    // WAV file output
+    std::ofstream wavFile;
+    std::mutex fileMutex;
+    uint64_t totalFramesWritten = 0; // frames * channels
+    int wavNumChannels = 2;
+    int wavSampleRate = 48000;
 };
