@@ -2,6 +2,7 @@
 #include <oboe/Oboe.h>
 #include <thread>
 #include <iostream>
+#include <cmath>
 
 using namespace oboe;
 
@@ -10,6 +11,7 @@ AudioEngine::AudioEngine() {
 }
 
 AudioEngine::~AudioEngine() {
+    stopRecording();
     stop();
     if (stream) {
         stream->close();
@@ -48,9 +50,39 @@ void AudioEngine::stop() {
     isPlaying.store(false);
 }
 
+bool AudioEngine::startRecording(const std::string &path) {
+    if (!stream) {
+        std::cerr << "Cannot start recording: stream not open" << std::endl;
+        return false;
+    }
+    if (writerOpened) return false;
+
+    int sr = static_cast<int>(stream->getSampleRate());
+    int ch = stream->getChannelCount();
+    bool ok = wavWriter.open(path, sr, ch);
+    if (ok) {
+        writerOpened = true;
+        isRecording.store(true);
+    }
+    return ok;
+}
+
+void AudioEngine::stopRecording() {
+    if (writerOpened) {
+        wavWriter.close();
+        writerOpened = false;
+    }
+    isRecording.store(false);
+}
+
 void AudioEngine::setRecording(bool enable) {
     isRecording.store(enable);
-    // Implement WAV capture + file writing here later
+    if (!enable) {
+        if (writerOpened) {
+            wavWriter.close();
+            writerOpened = false;
+        }
+    }
 }
 
 DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) {
@@ -71,7 +103,10 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
         }
     }
 
-    // If recording, capture buffer to file (not implemented yet)
+    // If recording, capture buffer to file
+    if (isRecording.load() && writerOpened) {
+        wavWriter.writeFloats(out, numFrames);
+    }
 
     return DataCallbackResult::Continue;
 }

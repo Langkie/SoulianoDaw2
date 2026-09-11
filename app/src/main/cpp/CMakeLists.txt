@@ -15,6 +15,7 @@ FetchContent_MakeAvailable(oboe)
 add_library(souliano_native SHARED
     native-lib.cpp
     AudioEngine.cpp
+    WAVWriter.cpp
 )
 
 find_package(oboe CONFIG REQUIRED)
