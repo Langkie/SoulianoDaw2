@@ -13,7 +13,7 @@ jobs:
 
       - name: Extract Souliano DAW
         run: |
-          unzip -q SoulianoDAW_1.0_Android36_Fixed.zip
+          ZIP=$(find.-maxdepth3-type f-iname '*Android36*Fixed*.zip' /head-1)echo "Found ZIP: $ZIP" unzip-q "$ZIP"
 
       - name: Set up Java
         uses: actions/setup-java@v4
