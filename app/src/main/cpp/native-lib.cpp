@@ -101,6 +101,26 @@ Java_com_langkie_soulianodaw_MainActivity_nativeToggleTrackMuteStatic(JNIEnv *en
     return ok ? JNI_TRUE : JNI_FALSE;
 }
 
+// Clip / transport
+extern "C" JNIEXPORT jint JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeCreateClipFromSampleStatic(JNIEnv *env, jclass /* cls */, jint sampleId, jint trackId, jlong startFrame) {
+    if (!engine) return -1;
+    int id = engine->createClipFromSample(static_cast<int>(sampleId), static_cast<int>(trackId), static_cast<uint64_t>(startFrame));
+    return id;
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeSetTransportPlayStatic(JNIEnv *env, jclass /* cls */, jboolean play) {
+    if (!engine) return;
+    engine->setTransportPlay(play == JNI_TRUE);
+}
+
+extern "C" JNIEXPORT void JNICALL
+Java_com_langkie_soulianodaw_MainActivity_nativeSeekTransportStatic(JNIEnv *env, jclass /* cls */, jlong frame) {
+    if (!engine) return;
+    engine->seekTransport(static_cast<uint64_t>(frame));
+}
+
 // Thumbnail JNI: returns float[] of length width with normalized peak values
 extern "C" JNIEXPORT jfloatArray JNICALL
 Java_com_langkie_soulianodaw_MainActivity_nativeGetSampleThumbnailStatic(JNIEnv *env, jclass /* cls */, jint sampleId, jint width) {

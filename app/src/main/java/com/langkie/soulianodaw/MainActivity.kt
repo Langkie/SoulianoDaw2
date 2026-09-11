@@ -49,6 +49,9 @@ class MainActivity : ComponentActivity() {
         external fun nativeToggleTrackMuteStatic(trackId: Int): Boolean
         external fun nativeExportMixdownStatic(path: String): Boolean
         external fun nativeGetSampleThumbnailStatic(sampleId: Int, width: Int): FloatArray?
+        external fun nativeCreateClipFromSampleStatic(sampleId: Int, trackId: Int, startFrame: Long): Int
+        external fun nativeSetTransportPlayStatic(play: Boolean)
+        external fun nativeSeekTransportStatic(frame: Long)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -92,7 +95,6 @@ class MainActivity : ComponentActivity() {
 fun WaveformView(sampleId: Int, widthDp: Dp = 300.dp, heightDp: Dp = 80.dp) {
     val context = LocalContext.current
     var thumbnail by remember { mutableStateOf<FloatArray?>(null) }
-    val widthPx = with(androidx.compose.ui.platform.LocalDensity.current) { widthDp.toPx() }
     val desired = 300 // number of points to request; reasonable default
 
     LaunchedEffect(sampleId) {
@@ -160,6 +162,7 @@ fun MainUI() {
     var recording by remember { mutableStateOf(false) }
     var lastTrackId by remember { mutableStateOf(-1) }
     var tracksCount by remember { mutableStateOf(0) }
+    var transportPos by remember { mutableStateOf(0f) }
     val context = LocalContext.current
     val activity = context as Activity
 
@@ -175,8 +178,10 @@ fun MainUI() {
                 if (!playing) {
                     playing = true
                     MainActivity.nativeStartStatic()
+                    MainActivity.nativeSetTransportPlayStatic(true)
                 } else {
                     playing = false
+                    MainActivity.nativeSetTransportPlayStatic(false)
                     MainActivity.nativeStopStatic()
                 }
             }) {
@@ -239,7 +244,7 @@ fun MainUI() {
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Button(onClick = {
                 // load last recording as a track without recording
                 val recordingsDir = File(activity.getExternalFilesDir(null), "recordings")
@@ -259,6 +264,18 @@ fun MainUI() {
             Spacer(modifier = Modifier.width(12.dp))
 
             Button(onClick = {
+                // create a clip from last track at transport position 0
+                if (lastTrackId >= 0) {
+                    // we use frame 0 for now
+                    MainActivity.nativeCreateClipFromSampleStatic(lastTrackId, lastTrackId, 0L)
+                }
+            }) {
+                Text("Add Clip at 0")
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Button(onClick = {
                 // trigger last track if exists
                 if (lastTrackId >= 0) {
                     MainActivity.nativeTriggerSampleStatic(lastTrackId)
@@ -266,6 +283,20 @@ fun MainUI() {
             }) {
                 Text("Play Last Track")
             }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Transport seek slider (very simple, maps to frames; UI uses seconds approx)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Pos:")
+            Slider(value = transportPos, onValueChange = { v -> transportPos = v }, valueRange = 0f..300f,
+                onValueChangeFinished = {
+                    // convert seconds to frames (assume 48000)
+                    val frame = (transportPos * 48000f).toLong()
+                    MainActivity.nativeSeekTransportStatic(frame)
+                }, modifier = Modifier.width(240.dp))
+            Text(String.format("%.1fs", transportPos))
         }
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -293,6 +324,6 @@ fun MainUI() {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        Text("Timeline placeholder (implement editor / tracks UI)")
+        Text("Timeline placeholder (implement editor / advanced clip UI later)")
     }
 }

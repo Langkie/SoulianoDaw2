@@ -51,6 +51,9 @@ void AudioEngine::start() {
     result = stream->requestStart();
     if (result == Result::OK) {
         isPlaying.store(true);
+        // start transport at 0 by default
+        transportFrame.store(0);
+        transportPlaying.store(true);
     } else {
         std::cerr << "Failed to start stream: " << static_cast<int>(result) << std::endl;
     }
@@ -60,6 +63,7 @@ void AudioEngine::stop() {
     if (!isPlaying.load() || !stream) return;
     stream->requestStop();
     isPlaying.store(false);
+    transportPlaying.store(false);
 }
 
 bool AudioEngine::startRecording(const std::string &path) {
@@ -144,6 +148,32 @@ bool AudioEngine::toggleTrackMute(int trackId) {
     return true;
 }
 
+int AudioEngine::createClipFromSample(int sampleId, int trackId, uint64_t startFrame) {
+    std::shared_ptr<Sample> s;
+    {
+        std::lock_guard<std::mutex> lock(samplesMutex);
+        if (sampleId < 0 || sampleId >= static_cast<int>(samples.size())) return -1;
+        s = samples[sampleId];
+    }
+    if (!s) return -1;
+    Clip c;
+    c.sampleId = sampleId;
+    c.trackId = trackId;
+    c.startFrame = startFrame;
+    c.lengthFrames = s->data.size() / s->channels;
+    std::lock_guard<std::mutex> lock(clipsMutex);
+    clips.push_back(c);
+    return static_cast<int>(clips.size() - 1);
+}
+
+void AudioEngine::setTransportPlay(bool play) {
+    transportPlaying.store(play);
+}
+
+void AudioEngine::seekTransport(uint64_t frame) {
+    transportFrame.store(frame);
+}
+
 std::vector<float> AudioEngine::getSampleThumbnail(int sampleId, int width) {
     std::vector<float> out;
     if (width <= 0) return out;
@@ -182,7 +212,7 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
     for (int i = 0; i < numFrames * numChannels; ++i) out[i] = 0.0f;
 
     // simple oscillator (for testing)
-    float amplitude = 0.12f;
+    float amplitude = 0.08f;
     double sr = oboeStream->getSampleRate();
     if (sr > 0) phaseIncrement = 2.0 * M_PI * 440.0 / sr;
 
@@ -195,7 +225,54 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
         }
     }
 
-    // Mix active voices
+    // Mix clips based on transport
+    uint64_t currentTransport = transportFrame.load();
+    bool playingTransport = transportPlaying.load();
+
+    if (playingTransport) {
+        std::lock_guard<std::mutex> lockClips(clipsMutex);
+        std::lock_guard<std::mutex> lockSamples(samplesMutex);
+        for (const auto &clip : clips) {
+            // If transport overlaps clip range, mix overlapping frames
+            uint64_t clipStart = clip.startFrame;
+            uint64_t clipEnd = clip.startFrame + clip.lengthFrames;
+            uint64_t blockStart = currentTransport;
+            uint64_t blockEnd = currentTransport + static_cast<uint64_t>(numFrames);
+
+            if (blockEnd <= clipStart || blockStart >= clipEnd) continue; // no overlap
+
+            // compute overlap range
+            uint64_t mixStart = std::max(blockStart, clipStart);
+            uint64_t mixEnd = std::min(blockEnd, clipEnd);
+
+            int sampleId = clip.sampleId;
+            if (sampleId < 0 || sampleId >= static_cast<int>(samples.size())) continue;
+            auto s = samples[sampleId];
+            if (!s) continue;
+            for (uint64_t f = mixStart; f < mixEnd; ++f) {
+                uint64_t frameIndexInBlock = f - blockStart; // 0..numFrames-1
+                uint64_t frameIndexInClip = f - clipStart; // index into sample
+                if (frameIndexInClip >= clip.lengthFrames) break;
+                for (int c = 0; c < numChannels; ++c) {
+                    int sampleChannel = c < s->channels ? c : 0;
+                    float sampleValue = s->data[frameIndexInClip * s->channels + sampleChannel];
+                    // find track gain
+                    float trackGain = 1.0f;
+                    bool muted = false;
+                    if (clip.trackId >= 0 && clip.trackId < static_cast<int>(tracks.size())) {
+                        trackGain = tracks[clip.trackId].gain;
+                        muted = tracks[clip.trackId].muted;
+                    }
+                    if (!muted)
+                        out[static_cast<int>(frameIndexInBlock) * numChannels + c] += sampleValue * trackGain;
+                }
+            }
+        }
+
+        transportFrame.fetch_add(static_cast<uint64_t>(numFrames));
+    }
+
+    // Mix active voices (oneshot triggers)
     std::lock_guard<std::mutex> lock(voicesMutex);
     for (auto it = voices.begin(); it != voices.end();) {
         Voice &v = *it;
