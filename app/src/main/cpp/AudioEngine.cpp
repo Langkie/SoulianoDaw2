@@ -2,6 +2,7 @@
 #include <oboe/Oboe.h>
 #include <thread>
 #include <iostream>
+#include <cmath>
 
 using namespace oboe;
 
@@ -37,6 +38,7 @@ void AudioEngine::start() {
     result = stream->requestStart();
     if (result == Result::OK) {
         isPlaying.store(true);
+        std::cerr << "Audio stream started successfully" << std::endl;
     } else {
         std::cerr << "Failed to start stream: " << static_cast<int>(result) << std::endl;
     }
@@ -46,11 +48,17 @@ void AudioEngine::stop() {
     if (!isPlaying.load() || !stream) return;
     stream->requestStop();
     isPlaying.store(false);
+    std::cerr << "Audio stream stopped" << std::endl;
 }
 
 void AudioEngine::setRecording(bool enable) {
     isRecording.store(enable);
-    // Implement WAV capture + file writing here later
+    if (enable) {
+        std::cerr << "Recording enabled" << std::endl;
+    } else {
+        std::cerr << "Recording disabled" << std::endl;
+    }
+    // WAV capture + file writing to be implemented next
 }
 
 DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) {
