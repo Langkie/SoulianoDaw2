@@ -6,6 +6,9 @@ import android.Manifest
 import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.Button
 import androidx.compose.material.Text
@@ -14,6 +17,10 @@ import androidx.compose.material.Slider
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.app.ActivityCompat
@@ -41,6 +48,7 @@ class MainActivity : ComponentActivity() {
         external fun nativeSetTrackGainStatic(trackId: Int, gain: Float): Boolean
         external fun nativeToggleTrackMuteStatic(trackId: Int): Boolean
         external fun nativeExportMixdownStatic(path: String): Boolean
+        external fun nativeGetSampleThumbnailStatic(sampleId: Int, width: Int): FloatArray?
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,6 +84,72 @@ class MainActivity : ComponentActivity() {
                 Log.w("Souliano", "Record permission denied")
             }
             pendingRecordingPath = null
+        }
+    }
+}
+
+@Composable
+fun WaveformView(sampleId: Int, widthDp: Dp = 300.dp, heightDp: Dp = 80.dp) {
+    val context = LocalContext.current
+    var thumbnail by remember { mutableStateOf<FloatArray?>(null) }
+    val widthPx = with(androidx.compose.ui.platform.LocalDensity.current) { widthDp.toPx() }
+    val desired = 300 // number of points to request; reasonable default
+
+    LaunchedEffect(sampleId) {
+        if (sampleId >= 0) {
+            try {
+                val arr = MainActivity.nativeGetSampleThumbnailStatic(sampleId, desired)
+                if (arr != null) thumbnail = arr
+            } catch (e: Exception) {
+                thumbnail = null
+            }
+        } else {
+            thumbnail = null
+        }
+    }
+
+    Box(modifier = Modifier
+        .width(widthDp)
+        .height(heightDp)
+        .background(Color(0xFF222222))) {
+        if (thumbnail != null) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val h = size.height
+                val w = size.width
+                val pts = thumbnail!!
+                val n = pts.size
+                if (n > 1) {
+                    val step = w / (n - 1)
+                    val path = Path()
+                    for (i in 0 until n) {
+                        val x = i * step
+                        val v = pts[i].coerceIn(0f, 1f)
+                        val y = h * (1f - v)
+                        if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                    }
+                    drawPath(path, Color.Cyan, style = Stroke(width = 2f))
+                }
+            }
+        } else {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No waveform", color = Color.LightGray)
+            }
+        }
+    }
+}
+
+@Composable
+fun TrackListUI(tracksCount: Int, onSetGain: (Int, Float) -> Unit, onToggleMute: (Int) -> Unit, onTrigger: (Int) -> Unit) {
+    Column {
+        for (i in 0 until tracksCount) {
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(8.dp)) {
+                Text("Track $i", modifier = Modifier.width(80.dp))
+                Slider(value = 1.0f, onValueChange = { v -> onSetGain(i, v) }, valueRange = 0f..2f, modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { onToggleMute(i) }) { Text("Mute") }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(onClick = { onTrigger(i) }) { Text("Play") }
+            }
         }
     }
 }
@@ -187,8 +261,6 @@ fun MainUI() {
             Button(onClick = {
                 // trigger last track if exists
                 if (lastTrackId >= 0) {
-                    // trigger the underlying sample
-                    // We don't have a direct track-play function; trigger sample by mapping track -> sample
                     MainActivity.nativeTriggerSampleStatic(lastTrackId)
                 }
             }) {
@@ -211,6 +283,13 @@ fun MainUI() {
                 MainActivity.nativeTriggerSampleStatic(tid)
             }
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        if (lastTrackId >= 0) {
+            Text("Waveform preview for track $lastTrackId")
+            WaveformView(sampleId = lastTrackId, widthDp = 320.dp, heightDp = 100.dp)
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
 

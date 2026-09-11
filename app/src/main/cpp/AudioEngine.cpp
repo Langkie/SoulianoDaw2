@@ -7,6 +7,7 @@
 #include <mutex>
 #include <memory>
 #include <vector>
+#include <algorithm>
 
 using namespace oboe;
 
@@ -143,6 +144,36 @@ bool AudioEngine::toggleTrackMute(int trackId) {
     return true;
 }
 
+std::vector<float> AudioEngine::getSampleThumbnail(int sampleId, int width) {
+    std::vector<float> out;
+    if (width <= 0) return out;
+    std::shared_ptr<Sample> s;
+    {
+        std::lock_guard<std::mutex> lock(samplesMutex);
+        if (sampleId < 0 || sampleId >= static_cast<int>(samples.size())) return out;
+        s = samples[sampleId];
+    }
+    if (!s) return out;
+    size_t frames = s->data.size() / s->channels;
+    if (frames == 0) return out;
+
+    out.resize(width);
+    size_t samplesPerBucket = std::max<size_t>(1, frames / width);
+    for (int i = 0; i < width; ++i) {
+        size_t startFrame = i * samplesPerBucket;
+        size_t endFrame = std::min(frames, startFrame + samplesPerBucket);
+        float peak = 0.0f;
+        for (size_t f = startFrame; f < endFrame; ++f) {
+            for (int c = 0; c < s->channels; ++c) {
+                float v = s->data[f * s->channels + c];
+                peak = std::max(peak, fabsf(v));
+            }
+        }
+        out[i] = peak; // normalized [0..1]
+    }
+    return out;
+}
+
 DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audioData, int32_t numFrames) {
     float *out = static_cast<float*>(audioData);
     int32_t numChannels = oboeStream->getChannelCount();
@@ -188,9 +219,6 @@ DataCallbackResult AudioEngine::onAudioReady(AudioStream *oboeStream, void *audi
             ++it;
         }
     }
-
-    // Mix tracks' head-of-sample once (tracks are represented as metadata; triggering is separate)
-    // Currently, tracks only hold metadata (gain/mute) — playback is done via triggerSample which creates voices.
 
     // If recording, capture buffer to file
     if (isRecording.load() && writerOpened) {
