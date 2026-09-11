@@ -5,6 +5,8 @@
 #include <mutex>
 #include <string>
 #include <cstdint>
+#include <memory>
+#include "SamplePlayer.h"
 
 class AudioEngine : public oboe::AudioStreamCallback {
 public:
@@ -13,6 +15,15 @@ public:
 
     void start();
     void stop();
+
+    // Sample playback
+    bool loadSample(const std::string& filePath);
+    void playSample();
+    void stopSample();
+    void seekSample(double timeSeconds);
+    double getSamplePosition();
+    double getSampleDuration();
+    bool hasSampleLoaded();
 
     // Recording control
     bool startRecording(const std::string &path);
@@ -29,6 +40,9 @@ private:
 
     double phase = 0.0;
     double phaseIncrement = 2.0 * M_PI * 440.0 / 48000.0; // default 48k sample rate handling later
+
+    // Sample player
+    std::unique_ptr<SamplePlayer> samplePlayer;
 
     // WAV file output
     std::ofstream wavFile;
