@@ -5,6 +5,10 @@
 #include <mutex>
 #include <string>
 #include <cstdint>
+#include <thread>
+#include <condition_variable>
+#include <deque>
+#include <vector>
 
 class AudioEngine : public oboe::AudioStreamCallback {
 public:
@@ -36,4 +40,12 @@ private:
     uint64_t totalFramesWritten = 0; // frames * channels
     int wavNumChannels = 2;
     int wavSampleRate = 48000;
+
+    // Background writer
+    std::thread writerThread;
+    std::mutex queueMutex;
+    std::condition_variable queueCond;
+    std::deque<std::vector<float>> bufferQueue;
+    std::atomic<bool> writerActive{false};
+    size_t maxQueuedBuffers = 512; // safety bound
 };
