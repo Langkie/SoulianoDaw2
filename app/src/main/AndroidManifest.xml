@@ -7,7 +7,7 @@
     <application
         android:label="SoulianoDAW"
         android:allowBackup="true"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@drawable/souliano_daw_icon
         <activity android:name=".MainActivity">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
