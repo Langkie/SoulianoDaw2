@@ -15,9 +15,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
           ZIP=$(find . -maxdepth 2 -type f -iname '*.zip' | head -1 || true)
-
           if [ -n "${ZIP:-}" ]; then
             echo "Found archive: $ZIP"
             unzip -q "$ZIP" -d /tmp/souliano_daw
@@ -32,24 +30,18 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Install Android SDK components
+      - name: Set up Android SDK
         shell: bash
         run: |
           set -euo pipefail
-
-          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/android-sdk}"
-          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
-
-          if [ ! -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "cmdline-tools/latest not found at $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-            ls -R "$ANDROID_SDK_ROOT" 2>/dev/null || true
-            exit 1
-          fi
-
-          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
-            "platform-tools" \
-            "platforms;android-34" \
-            "build-tools;34.0.0"
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
+          
+          mkdir -p "$ANDROID_SDK_ROOT/cmdline-tools/latest"
+          
+          sdkmanager --version
+          yes | sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0" 2>&1 || true
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -58,7 +50,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
+          
+          export ANDROID_SDK_ROOT=${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}
+          export ANDROID_HOME=$ANDROID_SDK_ROOT
+          
           PROJECT=""
           if [ -f settings.gradle.kts ] || [ -f settings.gradle ]; then
             PROJECT="."
@@ -71,22 +66,13 @@ jobs:
             exit 1
           fi
 
-          echo "Building project in: $PROJECT"
           cd "$PROJECT"
           gradle --no-daemon assembleDebug
 
-      - name: Upload APK artifact
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         if: success()
         with:
           name: SoulianoDAW-debug-APK
           path: '**/app/build/outputs/apk/debug/app-debug.apk'
           retention-days: 7
-
-      - name: Upload build logs on failure
-        uses: actions/upload-artifact@v4
-        if: failure()
-        with:
-          name: build-failure-logs
-          path: '**/build/outputs/logs/**'
-          retention-days: 3
