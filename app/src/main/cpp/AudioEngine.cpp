@@ -1,5 +1,6 @@
 #include "AudioEngine.h"
 #include <oboe/Oboe.h>
+#include <cmath>
 #include <thread>
 #include <iostream>
 
