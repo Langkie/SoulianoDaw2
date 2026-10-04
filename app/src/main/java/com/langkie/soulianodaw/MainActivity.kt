@@ -40,6 +40,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainUI() {
     val context = LocalContext.current
+    val activity = LocalContext.current as? MainActivity
 
     var playing by remember { mutableStateOf(false) }
     var recording by remember { mutableStateOf(false) }
@@ -58,9 +59,8 @@ fun MainUI() {
     ) { granted: Boolean ->
         recordPermissionGranted = granted
         if (granted) {
-            // If permission granted as part of a request to start recording, start recording
             recording = true
-            nativeToggleRecordStatic(true)
+            activity?.nativeToggleRecord(true)
         }
     }
 
@@ -75,11 +75,10 @@ fun MainUI() {
             Button(onClick = {
                 if (!playing) {
                     playing = true
-                    // call native start
-                    nativeStartStatic()
+                    activity?.nativeStart()
                 } else {
                     playing = false
-                    nativeStopStatic()
+                    activity?.nativeStop()
                 }
             }) {
                 Text(if (!playing) "Play" else "Stop")
@@ -89,14 +88,13 @@ fun MainUI() {
                 if (!recording) {
                     if (recordPermissionGranted) {
                         recording = true
-                        nativeToggleRecordStatic(true)
+                        activity?.nativeToggleRecord(true)
                     } else {
-                        // Request permission; if granted the launcher callback will start recording
                         permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 } else {
                     recording = false
-                    nativeToggleRecordStatic(false)
+                    activity?.nativeToggleRecord(false)
                 }
             }) {
                 Text(if (!recording) "Record" else "Stop Rec")
@@ -114,9 +112,3 @@ fun MainUI() {
         Text("Timeline placeholder (implement editor / tracks UI)")
     }
 }
-
-// JNI bridge via static functions so Compose lambdas can call them without an activity reference
-external fun nativeInitStatic()
-external fun nativeStartStatic()
-external fun nativeStopStatic()
-external fun nativeToggleRecordStatic(enable: Boolean)
