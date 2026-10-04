@@ -32,8 +32,24 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-$HOME/android-sdk}"
+          export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+
+          if [ ! -x "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" ]; then
+            echo "cmdline-tools/latest not found at $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+            ls -R "$ANDROID_SDK_ROOT" 2>/dev/null || true
+            exit 1
+          fi
+
+          yes | sdkmanager --sdk_root="$ANDROID_SDK_ROOT" \
+            "platform-tools" \
+            "platforms;android-34" \
+            "build-tools;34.0.0"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -52,8 +68,6 @@ jobs:
 
           if [ -z "${PROJECT:-}" ]; then
             echo "Error: No Android project found."
-            echo "Repository structure:"
-            find . -maxdepth 5 -type f | sed -n '1,50p'
             exit 1
           fi
 
