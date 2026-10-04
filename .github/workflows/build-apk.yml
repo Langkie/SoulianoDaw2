@@ -11,21 +11,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Extract Souliano DAW
+      - name: Extract project archive if present
         shell: bash
         run: |
           set -euo pipefail
 
-          ZIP=$(find . -maxdepth 3 -type f -iname '*Android36*Fixed*.zip' | head -1)
+          ZIP=$(find . -maxdepth 2 -type f -iname '*.zip' | head -1 || true)
 
-          if [ -z "${ZIP:-}" ]; then
-            echo "No Android36 Fixed ZIP found in repo."
-            find . -maxdepth 4 -type f | sed -n '1,80p'
-            exit 1
+          if [ -n "${ZIP:-}" ]; then
+            echo "Found archive: $ZIP"
+            unzip -q "$ZIP" -d /tmp/souliano_daw
+          else
+            echo "No ZIP archive found; using repo contents directly."
           fi
-
-          echo "Found ZIP: $ZIP"
-          unzip -q "$ZIP"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -49,14 +47,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          PROJECT=$(dirname "$(find . -name settings.gradle.kts | head -1)")
+          PROJECT=""
+          if [ -f settings.gradle.kts ] || [ -f settings.gradle ]; then
+            PROJECT="."
+          else
+            PROJECT=$(find /tmp/souliano_daw -maxdepth 5 \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname || true)
+          fi
 
           if [ -z "${PROJECT:-}" ]; then
-            echo "No settings.gradle.kts found in the repo."
-            find . -maxdepth 4 -type f | sed -n '1,80p'
+            echo "No Android project found."
+            find . -maxdepth 5 -type f | sed -n '1,120p'
             exit 1
           fi
 
+          echo "Using project directory: $PROJECT"
           cd "$PROJECT"
           ./gradlew --no-daemon assembleDebug
 
